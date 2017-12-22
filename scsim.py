@@ -65,25 +65,29 @@ class scsim:
 
     def simulate_doublets(self):
         ## Select doublet cells and determine the second cell to merge with
-        doublet_index = sorted(np.random.choice(self.ncells, self.ndoublets,
-                                                replace=False))
-        doublet_index = ['Cell%d' % (x+1) for x in doublet_index]
+        d_ind = sorted(np.random.choice(self.ncells, self.ndoublets,
+                                        replace=False))
+        d_ind = ['Cell%d' % (x+1) for x in d_ind]
         self.cellparams['is_doublet'] = False
-        self.cellparams.loc[doublet_index, 'is_doublet'] = True
-        extra_cells = self.cellparams.index[-self.ndoublets:]
-        group2 = self.cellparams.ix[extra_cells, 'group'].values
+        self.cellparams.loc[d_ind, 'is_doublet'] = True
+        extraind = self.cellparams.index[-self.ndoublets:]
+        group2 = self.cellparams.ix[extraind, 'group'].values
         self.cellparams['group2'] = -1
-        self.cellparams.loc[doublet_index, 'group2'] = group2
+        self.cellparams.loc[d_ind, 'group2'] = group2
 
         ## update the cell-gene means for the doublets while preserving the
         ## same library size
-        self.cellgenemean.loc[doublet_index,:] += self.cellgenemean.loc[extra_cells,:].values
-        normfactor = self.cellparams.loc[doublet_index, 'libsize'] / self.cellgenemean.loc[doublet_index, :].sum(axis=1)
-        self.cellgenemean.loc[doublet_index,:] = self.cellgenemean.loc[doublet_index,:].multiply(normfactor, axis=0)
+        dmean = self.cellgenemean.loc[d_ind,:]
+        dmean = dmean.multiply(.5 / dmean.sum(axis=1), axis=0)
+        omean = self.cellgenemean.loc[extraind,:]
+        omean = omean.multiply(.5 / omean.sum(axis=1), axis=0)
+        newmean = dmean + omean.values
+        newmean = newmean.multiply(self.cellparams.loc[d_ind, 'libsize'])
+        self.cellgenemean.loc[d_ind,:] = newmean
 
-        ## remove extra doublet cells from the data structure
-        self.cellgenemean.drop(extra_cells, axis=0, inplace=True)
-        self.cellparams.drop(extra_cells, axis=0, inplace=True)
+        ## remove extra doublet cells from the data structures
+        self.cellgenemean.drop(extraind, axis=0, inplace=True)
+        self.cellparams.drop(extraind, axis=0, inplace=True)
         self.cellnames = self.cellnames[0:self.ncells]
 
 
