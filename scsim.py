@@ -5,9 +5,9 @@ class scsim:
     def __init__(self, ngenes=10000, ncells=100, seed=757578,
                  mean_rate=.3, mean_shape=.6, libloc=11, libscale=0.2,
                 expoutprob=.05, expoutloc=4, expoutscale=0.5, ngroups=1,
-                groupprob=None, diffexpprob=.1, diffexpdownprob=.5,
+                diffexpprob=.1, diffexpdownprob=.5,
                 diffexploc=.1, diffexpscale=.4, bcv_dispersion=.1,
-                bcv_dof=60, ndoublets=0):
+                bcv_dof=60, ndoublets=0, groupprob=None):
         self.ngenes = ngenes
         self.ncells = ncells
         self.seed = seed
@@ -19,7 +19,6 @@ class scsim:
         self.expoutloc = expoutloc
         self.expoutscale = expoutscale
         self.ngroups = ngroups
-        self.groupprob = groupprob
         self.diffexpprob = diffexpprob
         self.diffexpdownprob = diffexpdownprob
         self.diffexploc = diffexploc
@@ -28,6 +27,13 @@ class scsim:
         self.bcv_dof = bcv_dof
         self.ndoublets = ndoublets
         self.init_ncells = ncells+ndoublets
+        if groupprob is None:
+            self.groupprob = [1/float(self.ngroups)]*self.ngroups
+        else:
+            if (len(groupprob) == self.ngroups) & (np.sum(groupprob) == 1):
+                self.groupprob = groupprob
+            else:
+                sys.exit('Invalid group_props input')
 
     def simulate(self):
         self.cellparams = self.get_cell_params()
@@ -42,14 +48,11 @@ class scsim:
         self.simulate_counts()
 
 
-
-
     def simulate_counts(self):
         '''Sample read counts for each gene x cell from Poisson distribution
         using the variance-trend adjusted updatedmean value'''
         self.counts = pd.DataFrame(np.random.poisson(lam=self.updatedmean),
                                    index=self.cellnames, columns=self.genenames)
-
 
     def adjust_means_bcv(self):
         '''Adjust cellgenemean to follow a mean-variance trend relationship'''
@@ -143,9 +146,6 @@ class scsim:
 
     def simulate_groups(self):
         '''Sample cell group identities from a categorical distriubtion'''
-        if self.groupprob is None:
-            self.groupprob = [1/float(self.ngroups)]*self.ngroups
-
         groupid = np.random.choice(np.arange(1, self.ngroups+1),
                                        size=self.init_ncells, p=self.groupprob)
         self.groups = np.unique(groupid)
