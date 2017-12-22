@@ -84,12 +84,6 @@ class scsim:
         newmean = dmean + omean.values
         newmean = newmean.multiply(self.cellparams.loc[d_ind, 'libsize'], axis=0)
         self.cellgenemean.loc[d_ind,:] = newmean
-
-        print(omean.head())
-        print(dmean.head())
-        print(newmean.head())
-
-
         ## remove extra doublet cells from the data structures
         self.cellgenemean.drop(extraind, axis=0, inplace=True)
         self.cellparams.drop(extraind, axis=0, inplace=True)
