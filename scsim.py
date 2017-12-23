@@ -7,7 +7,10 @@ class scsim:
                 expoutprob=.05, expoutloc=4, expoutscale=0.5, ngroups=1,
                 diffexpprob=.1, diffexpdownprob=.5,
                 diffexploc=.1, diffexpscale=.4, bcv_dispersion=.1,
-                bcv_dof=60, ndoublets=0, groupprob=None):
+                bcv_dof=60, ndoublets=0, groupprob=None,
+                nproggenes=None, progdownprob=None, progdeloc=None,
+                progdescale=None, proggoups=None, progcellfrac=None):
+
         self.ngenes = ngenes
         self.ncells = ncells
         self.seed = seed
@@ -27,17 +30,28 @@ class scsim:
         self.bcv_dof = bcv_dof
         self.ndoublets = ndoublets
         self.init_ncells = ncells+ndoublets
+        self.nproggenes=nproggenes
+        self.progdownprob=progdownprob
+        self.progdeloc=progdeloc
+        self.progdescale=progdescale
+        self.proggoups=proggoups
+        self.progcellfrac = progcellfrac
+
         if groupprob is None:
             self.groupprob = [1/float(self.ngroups)]*self.ngroups
+        elif (len(groupprob) == self.ngroups) & (np.sum(groupprob) == 1):
+            self.groupprob = groupprob
         else:
-            if (len(groupprob) == self.ngroups) & (np.sum(groupprob) == 1):
-                self.groupprob = groupprob
-            else:
-                sys.exit('Invalid group_props input')
+            sys.exit('Invalid groupprob input')
+
 
     def simulate(self):
         self.cellparams = self.get_cell_params()
         self.geneparams = self.get_gene_params()
+
+        if (self.nproggenes is not None) and (self.nproggenes > 0):
+            self.simulate_program()
+
         self.sim_group_DE()
         self.cellgenemean = self.get_cell_gene_means()
 
@@ -97,8 +111,23 @@ class scsim:
         '''Calculate each gene's mean expression for each cell by adjusting
         for the cells library size'''
         ind = self.cellparams['group'].apply(lambda x: 'group%d_genemean' % x)
-        cellgenemean = self.geneparams.loc[:,ind].T
-        cellgenemean.index = self.cellparams.index
+
+        if self.nproggenes == 0:
+            cellgenemean = self.geneparams.loc[:,ind].T
+            cellgenemean.index = self.cellparams.index
+        else:
+            progidx = self.geneparams['prog_gene']
+            nonprog = self.geneparams.loc[~progidx, ind].T
+            nonprog.columns = self.geneparams.index[~progidx]
+            nonprog.index = self.cellparams.index
+            cellprogind = self.cellparams['has_program'].replace({False:'gene_mean', True:'prog_genemean'})
+
+            prog = self.geneparams.loc[progidx, cellprogind].T
+            prog.columns = self.geneparams.index[progidx]
+            prog.index = self.cellparams.index
+            cellgenemean = pd.concat([nonprog, prog], axis=1)
+            cellgenemean = cellgenemean.loc[:, self.geneparams.index]
+
         normfac = self.cellparams['libsize'] / cellgenemean.sum(axis=1)
         cellgenemean = cellgenemean.multiply(normfac, axis=0).astype(float)
         return(cellgenemean)
@@ -122,8 +151,6 @@ class scsim:
         gene_mean = basegenemean.copy()
         median = np.median(basegenemean)
         gene_mean[is_outlier] = outliers*median
-
-
         self.genenames = ['Gene%d' % i for i in range(1, self.ngenes+1)]
         geneparams = pd.DataFrame([basegenemean, is_outlier, outlier_ratio, gene_mean],
                                   index=['BaseGeneMean', 'is_outlier', 'outlier_ratio', 'gene_mean'],
@@ -143,6 +170,38 @@ class scsim:
         cellparams['group'] = cellparams['group'].astype(int)
         return(cellparams)
 
+    def simulate_program(self):
+        ## Simulate the program gene expression
+        self.geneparams['prog_gene'] = False
+        proggenes = self.geneparams.index[-self.nproggenes:]
+        self.geneparams.loc[proggenes, 'prog_gene'] = True
+        DEratio = np.random.lognormal(mean=self.progdeloc,
+                                          sigma=self.progdescale,
+                                          size=self.nproggenes)
+        DEratio[DEratio<1] = 1 / DEratio[DEratio<1]
+        is_downregulated = np.random.choice([True, False],
+                                            size=len(DEratio),
+                                            p=[self.progdownprob,
+                                            1-self.progdownprob])
+        DEratio[is_downregulated] = 1. / DEratio[is_downregulated]
+        all_DE_ratio = np.ones(self.ngenes)
+        all_DE_ratio[-self.nproggenes:] = DEratio
+        prog_mean = self.geneparams['gene_mean']*all_DE_ratio
+        self.geneparams['prog_genemean'] = prog_mean
+
+        ## Assign the program to cells
+        self.cellparams['has_program'] = False
+        if self.proggoups is None:
+            ## The program is active in all cell types
+            self.proggoups = np.arange(1, self.ngroups+1)
+
+        for g in self.proggoups:
+            groupcells = self.cellparams.index[self.cellparams['group']==g]
+            hasprog = np.random.choice([True, False], size=len(groupcells),
+                                      p=[self.progcellfrac,
+                                      1-self.progcellfrac])
+            self.cellparams.loc[groupcells[hasprog], 'has_program'] = True
+
 
     def simulate_groups(self):
         '''Sample cell group identities from a categorical distriubtion'''
@@ -151,18 +210,27 @@ class scsim:
         self.groups = np.unique(groupid)
         return(groupid)
 
+
     def sim_group_DE(self):
         '''Sample differentially expressed genes and the DE factor for each
         cell-type group'''
         groups = self.cellparams['group'].unique()
+        if self.nproggenes>0:
+            proggene = self.geneparams['prog_gene'].values
+        else:
+            proggene = np.array([False]*self.geneparams.shape[0])
+
         for group in self.groups:
             isDE = np.random.choice([True, False], size=self.ngenes,
                                       p=[self.diffexpprob,1-self.diffexpprob])
-            DEratio = np.random.lognormal(mean=self.diffexploc, sigma=self.diffexpscale,
-                                      size=isDE.sum())
+            isDE[proggene] = False # Program genes shouldn't be differentially expressed between groups
+            DEratio = np.random.lognormal(mean=self.diffexploc,
+                                          sigma=self.diffexpscale,
+                                          size=isDE.sum())
             DEratio[DEratio<1] = 1 / DEratio[DEratio<1]
-            is_downregulated = np.random.choice([True, False], size=len(DEratio),
-                                      p=[self.diffexpdownprob,1-self.diffexpdownprob])
+            is_downregulated = np.random.choice([True, False],
+                                            size=len(DEratio),
+                                            p=[self.diffexpdownprob,1-self.diffexpdownprob])
             DEratio[is_downregulated] = 1. / DEratio[is_downregulated]
             all_DE_ratio = np.ones(self.ngenes)
             all_DE_ratio[isDE] = DEratio
