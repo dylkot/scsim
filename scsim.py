@@ -9,7 +9,8 @@ class scsim:
                 diffexploc=.1, diffexpscale=.4, bcv_dispersion=.1,
                 bcv_dof=60, ndoublets=0, groupprob=None,
                 nproggenes=None, progdownprob=None, progdeloc=None,
-                progdescale=None, proggoups=None, progcellfrac=None):
+                progdescale=None, proggoups=None, progcellfrac=None,
+                minprogusage=.2, maxprogusage=.8):
 
         self.ngenes = ngenes
         self.ncells = ncells
@@ -36,6 +37,8 @@ class scsim:
         self.progdescale=progdescale
         self.proggoups=proggoups
         self.progcellfrac = progcellfrac
+        self.minprogusage = minprogusage
+        self.maxprogusage = maxprogusage
 
         if groupprob is None:
             self.groupprob = [1/float(self.ngroups)]*self.ngroups
@@ -52,15 +55,14 @@ class scsim:
         if (self.nproggenes is not None) and (self.nproggenes > 0):
             self.simulate_program()
 
+
         self.sim_group_DE()
         self.cellgenemean = self.get_cell_gene_means()
-
         if self.ndoublets > 0:
             self.simulate_doublets()
 
         self.adjust_means_bcv()
         self.simulate_counts()
-
 
     def simulate_counts(self):
         '''Sample read counts for each gene x cell from Poisson distribution
@@ -116,17 +118,12 @@ class scsim:
             cellgenemean = self.geneparams.loc[:,ind].T
             cellgenemean.index = self.cellparams.index
         else:
-            progidx = self.geneparams['prog_gene']
-            nonprog = self.geneparams.loc[~progidx, ind].T
-            nonprog.columns = self.geneparams.index[~progidx]
-            nonprog.index = self.cellparams.index
-            cellprogind = self.cellparams['has_program'].replace({False:'gene_mean', True:'prog_genemean'})
-
-            prog = self.geneparams.loc[progidx, cellprogind].T
-            prog.columns = self.geneparams.index[progidx]
-            prog.index = self.cellparams.index
-            cellgenemean = pd.concat([nonprog, prog], axis=1)
-            cellgenemean = cellgenemean.loc[:, self.geneparams.index]
+            groupmean = self.geneparams.loc[:,ind].T
+            groupmean.index = self.cellparams.index
+            ncells = len(ind)
+            progmean = self.geneparams.loc[:,['prog_genemean']*ncells].T
+            progmean.index = self.cellparams.index
+            cellgenemean = progmean.multiply(self.cellparams['program_usage'], axis=0) + groupmean.multiply(1 - self.cellparams['program_usage'], axis=0)
 
         normfac = self.cellparams['libsize'] / cellgenemean.sum(axis=1)
         cellgenemean = cellgenemean.multiply(normfac, axis=0).astype(float)
@@ -195,12 +192,19 @@ class scsim:
             ## The program is active in all cell types
             self.proggoups = np.arange(1, self.ngroups+1)
 
+        self.cellparams.loc[:, 'program_usage'] = 0
         for g in self.proggoups:
             groupcells = self.cellparams.index[self.cellparams['group']==g]
             hasprog = np.random.choice([True, False], size=len(groupcells),
                                       p=[self.progcellfrac,
                                       1-self.progcellfrac])
             self.cellparams.loc[groupcells[hasprog], 'has_program'] = True
+            usages = np.random.uniform(low=self.minprogusage,
+                                       high=self.maxprogusage,
+                                       size=len(groupcells[hasprog]))
+            self.cellparams.loc[groupcells[hasprog], 'program_usage'] = usages
+
+
 
 
     def simulate_groups(self):
