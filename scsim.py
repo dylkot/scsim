@@ -49,19 +49,26 @@ class scsim:
 
 
     def simulate(self):
+        print('Simulating cells')
         self.cellparams = self.get_cell_params()
+        print('Simulating gene params')
         self.geneparams = self.get_gene_params()
 
         if (self.nproggenes is not None) and (self.nproggenes > 0):
+            print('Simulating program')
             self.simulate_program()
 
-
+        print('Simulating DE')
         self.sim_group_DE()
+        print('Simulating cell-gene means')
         self.cellgenemean = self.get_cell_gene_means()
         if self.ndoublets > 0:
+            print('Simulating doublets')
             self.simulate_doublets()
 
+        print('Adjusting means')
         self.adjust_means_bcv()
+        print('Simulating counts')
         self.simulate_counts()
 
     def simulate_counts(self):
@@ -118,13 +125,23 @@ class scsim:
             cellgenemean = self.geneparams.loc[:,ind].T
             cellgenemean.index = self.cellparams.index
         else:
+            print('   - Getting group means')
             groupmean = self.geneparams.loc[:,ind].T
             groupmean.index = self.cellparams.index
+            print('   - Normalizing group means')
+            groupmean = groupmean.div(groupmean.sum(axis=1), axis=0)
             ncells = len(ind)
+            print('   - Getting program means')
             progmean = self.geneparams.loc[:,['prog_genemean']*ncells].T
             progmean.index = self.cellparams.index
-            cellgenemean = progmean.multiply(self.cellparams['program_usage'], axis=0) + groupmean.multiply(1 - self.cellparams['program_usage'], axis=0)
+            print('   - Normalizing program means')
+            progmean = progmean.div(progmean.sum(axis=1), axis=0)
+            cellgenemean = progmean.multiply(self.cellparams['program_usage'], axis=0)
+            del(progmean)
+            cellgenemean = cellgenemean + groupmean.multiply(1 - self.cellparams['program_usage'], axis=0)
+            del(groupmean)
 
+        print('   - Normalizing by cell libsize')
         normfac = self.cellparams['libsize'] / cellgenemean.sum(axis=1)
         cellgenemean = cellgenemean.multiply(normfac, axis=0).astype(float)
         return(cellgenemean)
