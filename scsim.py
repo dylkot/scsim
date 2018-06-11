@@ -184,6 +184,7 @@ class scsim:
         cellparams['group'] = cellparams['group'].astype(int)
         return(cellparams)
 
+
     def simulate_program(self):
         ## Simulate the program gene expression
         self.geneparams['prog_gene'] = False
