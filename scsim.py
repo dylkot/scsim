@@ -49,6 +49,7 @@ class scsim:
 
 
     def simulate(self):
+        np.random.seed(self.seed)
         print('Simulating cells')
         self.cellparams = self.get_cell_params()
         print('Simulating gene params')
