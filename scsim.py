@@ -1,5 +1,34 @@
 import pandas as pd
 import numpy as np
+import sys
+
+def divide_df_in_place(df, ser, axis=0):
+    '''divide each column by ser elementwise'''
+    if axis == 0:
+        for col in df:
+            df[col] /= ser
+    else:
+        sys.exit('not implemented')
+
+
+def multiply_df_in_place(df, ser, axis=0):
+    '''divide each column by ser elementwise'''
+    if axis == 0:
+        for col in df:
+            df[col] *= ser
+    else:
+        sys.exit('not implemented')
+
+
+def add_dfs_in_place(df1, df2, axis=0):
+    '''updates df1 by adding corresponding columns of df2 to df1 in place'''
+    if axis == 0:
+        for col in df1:
+            df1[col] += df2[col]
+    else:
+        sys.exit('not implemented')
+
+
 
 class scsim:
     def __init__(self, ngenes=10000, ncells=100, seed=757578,
@@ -61,6 +90,7 @@ class scsim:
 
         print('Simulating DE')
         self.sim_group_DE()
+
         print('Simulating cell-gene means')
         self.cellgenemean = self.get_cell_gene_means()
         if self.ndoublets > 0:
@@ -118,32 +148,73 @@ class scsim:
 
 
     def get_cell_gene_means(self):
-        '''Calculate each gene's mean expression for each cell by adjusting
-        for the cells library size'''
+        '''Calculate each gene's mean expression for each cell while adjusting
+        for the library size'''
+
+
+        group_genemean = self.geneparams.loc[:,[x for x in self.geneparams.columns if ('_genemean' in x) and ('group' in x)]].T
+        group_genemean = group_genemean.div(group_genemean.sum(axis=1), axis=0)
+
         ind = self.cellparams['group'].apply(lambda x: 'group%d_genemean' % x)
 
+
+
         if self.nproggenes == 0:
-            cellgenemean = self.geneparams.loc[:,ind].T
+            cellgenemean = group_genemean.loc[ind,:]
             cellgenemean.index = self.cellparams.index
         else:
+            noprogcells = self.cellparams['has_program']==False
+            hasprogcells = self.cellparams['has_program']==True
+
+            print('   - Getting mean for program carrying cells')
+            progcellmean = group_genemean.loc[ind[hasprogcells], :]
+            progcellmean.index = ind.index[hasprogcells]
+            progcellmean = progcellmean.multiply(1-self.cellparams.loc[hasprogcells, 'program_usage'], axis=0)
+
+            progmean = self.geneparams.loc[:,['prog_genemean']]
+            progmean = progmean.div(progmean.sum(axis=0), axis=1)
+            progusage = self.cellparams.loc[progcellmean.index, ['program_usage']]
+            progusage.columns = ['prog_genemean']
+            progcellmean += progusage.dot(progmean.T)
+
+            print('   - Getting mean for non-program carrying cells')
+            noprogcellmean = group_genemean.loc[ind[noprogcells],:]
+            noprogcellmean.index = ind.index[noprogcells]
+
+            cellgenemean = pd.concat([noprogcellmean, progcellmean], axis=0)
+            del(progcellmean, noprogcellmean)
+            cellgenemean.reindex(columns=self.cellparams.index, copy=False)
+
+
+
+            '''
             print('   - Getting group means')
             groupmean = self.geneparams.loc[:,ind].T
             groupmean.index = self.cellparams.index
             print('   - Normalizing group means')
-            groupmean = groupmean.div(groupmean.sum(axis=1), axis=0)
+            divide_df_in_place(groupmean, groupmean.sum(axis=1), axis=0)
+            #groupmean = groupmean.div(groupmean.sum(axis=1), axis=0)
             ncells = len(ind)
             print('   - Getting program means')
             progmean = self.geneparams.loc[:,['prog_genemean']*ncells].T
             progmean.index = self.cellparams.index
             print('   - Normalizing program means')
-            progmean = progmean.div(progmean.sum(axis=1), axis=0)
-            cellgenemean = progmean.multiply(self.cellparams['program_usage'], axis=0)
+
+            divide_df_in_place(progmean, progmean.sum(axis=1), axis=0)
+            multiply_df_in_place(progmean, self.cellparams['program_usage'], axis=0)
+            multiply_df_in_place(groupmean, 1 - self.cellparams['program_usage'], axis=0)
+            add_dfs_in_place(groupmean, progmean, axis=0)
+            #progmean = progmean.div(progmean.sum(axis=1), axis=0)
+            #cellgenemean = progmean.multiply(self.cellparams['program_usage'], axis=0)
+            #del(progmean)
+            #cellgenemean = cellgenemean + groupmean.multiply(1 - self.cellparams['program_usage'], axis=0)
             del(progmean)
-            cellgenemean = cellgenemean + groupmean.multiply(1 - self.cellparams['program_usage'], axis=0)
-            del(groupmean)
+            '''
 
         print('   - Normalizing by cell libsize')
         normfac = self.cellparams['libsize'] / cellgenemean.sum(axis=1)
+        #multiply_df_in_place(cellgenemean, normfac, axis=0)
+        #groupmean.astype(float, copy=False)
         cellgenemean = cellgenemean.multiply(normfac, axis=0).astype(float)
         return(cellgenemean)
 
@@ -189,7 +260,7 @@ class scsim:
     def simulate_program(self):
         ## Simulate the program gene expression
         self.geneparams['prog_gene'] = False
-        proggenes = self.geneparams.index[-self.nproggenes:]
+        proggenes = self.geneparams.index[1-self.nproggenes:]
         self.geneparams.loc[proggenes, 'prog_gene'] = True
         DEratio = np.random.lognormal(mean=self.progdeloc,
                                           sigma=self.progdescale,
