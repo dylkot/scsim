@@ -183,9 +183,8 @@ class scsim:
 
             cellgenemean = pd.concat([noprogcellmean, progcellmean], axis=0)
             del(progcellmean, noprogcellmean)
-            cellgenemean.reindex(columns=self.cellparams.index, copy=False)
 
-
+            cellgenemean = cellgenemean.reindex(index=self.cellparams.index)
 
             '''
             print('   - Getting group means')
