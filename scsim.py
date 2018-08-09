@@ -166,7 +166,6 @@ class scsim:
         normfac = (self.cellparams['libsize'] / cellgenemean.sum(axis=1)).values
         for col in cellgenemean.columns:
             cellgenemean[col] = cellgenemean[col].values*normfac
-        #cellgenemean = cellgenemean.multiply(normfac, axis=0).astype(float)
         return(cellgenemean)
 
 
