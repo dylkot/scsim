@@ -82,7 +82,7 @@ class scsim:
 
     def adjust_means_bcv(self):
         '''Adjust cellgenemean to follow a mean-variance trend relationship'''
-        self.bcv = (self.bcv_dispersion + (1 / np.sqrt(self.cellgenemean.astype(float))))
+        self.bcv = self.bcv_dispersion + (1 / np.sqrt(self.cellgenemean))
         chisamp = np.random.chisquare(self.bcv_dof, size=self.ngenes)
         self.bcv = self.bcv*np.sqrt(self.bcv_dof / chisamp)
         self.updatedmean = np.random.gamma(shape=1/(self.bcv**2),
@@ -129,7 +129,7 @@ class scsim:
 
         group_genemean = self.geneparams.loc[:,[x for x in self.geneparams.columns if ('_genemean' in x) and ('group' in x)]].T
         group_genemean = group_genemean.div(group_genemean.sum(axis=1), axis=0)
-        group_genemean = group_genemean.astype(float)
+        #group_genemean = group_genemean.astype(float)
         ind = self.cellparams['group'].apply(lambda x: 'group%d_genemean' % x)
 
 
@@ -211,7 +211,7 @@ class scsim:
     def simulate_program(self):
         ## Simulate the program gene expression
         self.geneparams['prog_gene'] = False
-        proggenes = self.geneparams.index[1-self.nproggenes:]
+        proggenes = self.geneparams.index[-self.nproggenes:]
         self.geneparams.loc[proggenes, 'prog_gene'] = True
         DEratio = np.random.lognormal(mean=self.progdeloc,
                                           sigma=self.progdescale,
