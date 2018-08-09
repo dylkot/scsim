@@ -106,12 +106,15 @@ class scsim:
 
         ## update the cell-gene means for the doublets while preserving the
         ## same library size
-        dmean = self.cellgenemean.loc[d_ind,:]
-        dmean = dmean.multiply(.5 / dmean.sum(axis=1), axis=0)
-        omean = self.cellgenemean.loc[extraind,:]
-        omean = omean.multiply(.5 / omean.sum(axis=1), axis=0)
-        newmean = dmean + omean.values
-        newmean = newmean.multiply(self.cellparams.loc[d_ind, 'libsize'], axis=0)
+        dmean = self.cellgenemean.loc[d_ind,:].values
+        dmultiplier = .5 / dmean.sum(axis=1)
+        dmean = np.multiply(dmean, dmultiplier[:, np.newaxis])
+        omean = self.cellgenemean.loc[extraind,:].values
+        omultiplier = .5 / omean.sum(axis=1)
+        omean = np.multiply(omean, omultiplier[:,np.newaxis])
+        newmean = dmean + omean
+        libsize = self.cellparams.loc[d_ind, 'libsize'].values
+        newmean = np.multiply(newmean, libsize[:,np.newaxis])
         self.cellgenemean.loc[d_ind,:] = newmean
         ## remove extra doublet cells from the data structures
         self.cellgenemean.drop(extraind, axis=0, inplace=True)
@@ -126,7 +129,7 @@ class scsim:
 
         group_genemean = self.geneparams.loc[:,[x for x in self.geneparams.columns if ('_genemean' in x) and ('group' in x)]].T
         group_genemean = group_genemean.div(group_genemean.sum(axis=1), axis=0)
-
+        group_genemean = group_genemean.astype(float)
         ind = self.cellparams['group'].apply(lambda x: 'group%d_genemean' % x)
 
 
@@ -138,7 +141,7 @@ class scsim:
             noprogcells = self.cellparams['has_program']==False
             hasprogcells = self.cellparams['has_program']==True
 
-            print('   - Getting mean for program carrying cells')
+            print('   - Getting mean for activity program carrying cells')
             progcellmean = group_genemean.loc[ind[hasprogcells], :]
             progcellmean.index = ind.index[hasprogcells]
             progcellmean = progcellmean.multiply(1-self.cellparams.loc[hasprogcells, 'program_usage'], axis=0)
@@ -149,11 +152,12 @@ class scsim:
             progusage.columns = ['prog_genemean']
             progcellmean += progusage.dot(progmean.T)
 
-            print('   - Getting mean for non-program carrying cells')
+            print('   - Getting mean for non activity program carrying cells')
             noprogcellmean = group_genemean.loc[ind[noprogcells],:]
             noprogcellmean.index = ind.index[noprogcells]
 
-            cellgenemean = pd.concat([noprogcellmean, progcellmean], axis=0)
+            cellgenemean = pd.concat([noprogcellmean, progcellmean], axis=0).astype(float)
+
             del(progcellmean, noprogcellmean)
 
             cellgenemean = cellgenemean.reindex(index=self.cellparams.index)
