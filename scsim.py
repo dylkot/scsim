@@ -132,7 +132,7 @@ class scsim:
         ind = self.cellparams['group'].apply(lambda x: 'group%d_genemean' % x)
 
         if self.nproggenes == 0:
-            cellgenemean = group_genemean.loc[ind,:]
+            cellgenemean = group_genemean.loc[ind,:].astype(float)
             cellgenemean.index = self.cellparams.index
         else:
             noprogcells = self.cellparams['has_program']==False
