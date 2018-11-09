@@ -127,15 +127,12 @@ class scsim:
         for the library size'''
 
 
-        group_genemean = self.geneparams.loc[:,[x for x in self.geneparams.columns if ('_genemean' in x) and ('group' in x)]].T
+        group_genemean = self.geneparams.loc[:,[x for x in self.geneparams.columns if ('_genemean' in x) and ('group' in x)]].T.astype(float)
         group_genemean = group_genemean.div(group_genemean.sum(axis=1), axis=0)
-        #group_genemean = group_genemean.astype(float)
         ind = self.cellparams['group'].apply(lambda x: 'group%d_genemean' % x)
 
-
-
         if self.nproggenes == 0:
-            cellgenemean = group_genemean.loc[ind,:].astype(float)
+            cellgenemean = group_genemean.loc[ind,:]
             cellgenemean.index = self.cellparams.index
         else:
             noprogcells = self.cellparams['has_program']==False
@@ -151,12 +148,13 @@ class scsim:
             progusage = self.cellparams.loc[progcellmean.index, ['program_usage']]
             progusage.columns = ['prog_genemean']
             progcellmean += progusage.dot(progmean.T)
+            progcellmean = progcellmean.astype(float)
 
             print('   - Getting mean for non activity program carrying cells')
             noprogcellmean = group_genemean.loc[ind[noprogcells],:]
             noprogcellmean.index = ind.index[noprogcells]
 
-            cellgenemean = pd.concat([noprogcellmean, progcellmean], axis=0).astype(float)
+            cellgenemean = pd.concat([noprogcellmean, progcellmean], axis=0)
 
             del(progcellmean, noprogcellmean)
 
