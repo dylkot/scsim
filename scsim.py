@@ -43,7 +43,7 @@ class scsim:
 
         if groupprob is None:
             self.groupprob = [1/float(self.ngroups)]*self.ngroups
-        elif (len(groupprob) == self.ngroups) & (np.sum(groupprob) == 1):
+        elif (len(groupprob) == self.ngroups) & (np.abs(np.sum(groupprob) - 1) < (10**-6)):
             self.groupprob = groupprob
         else:
             sys.exit('Invalid groupprob input')
