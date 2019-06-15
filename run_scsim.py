@@ -13,7 +13,8 @@ def save_df(obj, filename):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Run scsim with specified input arguments')
-    parser.add_argument('--outdir', type=str, help='Output directory base')
+    parser.add_argument('--outdir', type=str, default='scsim-%s-%s-%s-%s-%s-%s-%s-%s',
+                        help='Output directory base')
     parser.add_argument('--seed', type=int,
                         help='seed for generating simulation seeds')
     parser.add_argument('--numsims', type=int, help='number of sims to run',
