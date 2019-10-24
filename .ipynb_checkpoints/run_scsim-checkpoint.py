@@ -11,12 +11,6 @@ def save_df(obj, filename):
     np.savez_compressed(filename, data=obj.values, index=obj.index.values, columns=obj.columns.values)
 
 
-def load_df(filename):
-    with np.load(filename, allow_pickle=True) as f:
-        obj = pd.DataFrame(**f)
-    return obj
-    
-    
 def parse_args():
     parser = argparse.ArgumentParser(description='Run scsim with specified input arguments')
     parser.add_argument('--outdir', type=str, default='scsim-%s-%s-%s-%s-%s-%s-%s-%s',
